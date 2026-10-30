@@ -8,8 +8,8 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION  1
 #define configUSE_TICKLESS_IDLE                  0
 #define configCPU_CLOCK_HZ                       ( 168000000UL ) /* F407 主频 168MHz */
-#define configTICK_RATE_HZ                       ( 1000 )        /* 系统节拍 1kHz (1ms) */
-#define configMAX_PRIORITIES                     ( 7 )           /* 最大任务优先级 (0~6) */
+#define configTICK_RATE_HZ                       ( ( TickType_t ) 1000 )        /* 系统节拍 1kHz (1ms) */
+#define configMAX_PRIORITIES                     ( 6 )           /* 最大任务优先级 (0~6) */
 #define configMINIMAL_STACK_SIZE                 ( ( unsigned short ) 128 )
 #define configMAX_TASK_NAME_LEN                  ( 16 )
 #define configUSE_16_BIT_TICKS                   0
@@ -86,8 +86,9 @@
 
 /* ================= 10. 中断服务函数映射 (极其关键) ================= */
 /* 告诉 FreeRTOS，这三个中断由它自己接管。因此你必须在 stm32f4xx_it.c 中把它们注释掉 */
+ /* 将 FreeRTOS 内核的汇编处理函数，重命名对接给启动文件 startup_xxx.s 中的中断向量 */
 #define vPortSVCHandler                          SVC_Handler
 #define xPortPendSVHandler                       PendSV_Handler
-#define xPortSysTickHandler                      SysTick_Handler
+// #define xPortSysTickHandler                      SysTick_Handler
 
 #endif /* FREERTOS_CONFIG_H */

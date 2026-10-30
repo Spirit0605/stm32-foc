@@ -1,10 +1,12 @@
 #include "current.h"
 
+// 三相电流计算公式
 float CurrentSense_Convert(uint16_t raw, float offset)
 {
     return ((float)raw - offset) * ADC_VREF / ADC_MAX / CURRENT_SENSITIVITY;
 }
 
+//获得母线电压采样
 float FOC_GetVbus(uint16_t adc_raw)
 {
     float adc_voltage = (float)adc_raw * ADC_VREF / ADC_MAX;
@@ -12,6 +14,7 @@ float FOC_GetVbus(uint16_t adc_raw)
     return vbus;
 }
 
+//获得母线电流采样
 float FOC_GetCbus(uint16_t adc_raw)
 {
     float adc_voltage = (float)adc_raw * ADC_VREF / ADC_MAX;
@@ -19,6 +22,7 @@ float FOC_GetCbus(uint16_t adc_raw)
     return cbus;
 }
 
+//获得温度采样
 float FOC_GetNTC(uint16_t adc_raw)
 {
     // 1. ADC 原始值转换为电压

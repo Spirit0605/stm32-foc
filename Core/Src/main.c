@@ -32,6 +32,7 @@
 #include "AS5600.h"
 #include "current.h"
 #include "foc.h"
+#include "delay.h"
 
 #include "FreeRTOSConfig.h"
 #include "FreeRTOS.h"
@@ -61,8 +62,10 @@ volatile float v_bus = 0.0f; // ⺟线电压采样输出，对应 ADC_VBUS
 volatile float c_bus = 0.0f; // ⺟线电流采样输出，对应 ADC_CBUS
 volatile float ntc = 0.0f;   // 温度采样输出，对应 ADC_NTC
 
+// 电角度零点偏置校准
+volatile uint16_t electrical_offset = 0.0f;
 // 零点偏置校准
-volatile uint16_t of_a = 0, of_b = 0, of_c = 0;
+volatile uint16_t of_a = 0, of_b = 0;
 // 唤醒驱动板后
 // 第1次： of_a = 2095, of_b = 2089, of_c = 2091
 // 第2次： of_a = 2096, of_b = 2088, of_c = 2092
@@ -75,7 +78,7 @@ volatile uint16_t of_a = 0, of_b = 0, of_c = 0;
 // 第9次： of_a = 2099, of_b = 2089, of_c = 2090
 // 第10次： of_a = 2097, of_b = 2087, of_c = 2092
 
-int16_t raw_a = 0, raw_b = 0, raw_c = 0;
+int16_t raw_a = 0, raw_b = 0;
 // 采样电流
 volatile float Ia = 0.0f, Ib = 0.0f, Ic = 0.0f; // 三相采样电流
 volatile float elec_rad = 0.0f;                 // 电角度（弧度制）
@@ -118,17 +121,17 @@ void Led_Toggle()
 {
   HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
   HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-  HAL_Delay(100);
+  delay_ms(100);
 }
 
 static void FOC_Control_Init(void)
 {
   /* 初期先用较小的输出限幅，后续结合硬件参数调整 */
-  PI_Init(&pi_id, 0.3f, 50.0f, -2.0f, 2.0f);
-  PI_Init(&pi_iq, 0.3f, 50.0f, -2.0f, 2.0f);
+  PI_Init(&pi_id, 0.3f, 50.0f, -5.0f, 5.0f);
+  PI_Init(&pi_iq, 0.3f, 50.0f, -5.0f, 5.0f);
 
   foc_ctrl.id_ref = 0.0f;
-  foc_ctrl.iq_ref = 0.0f;
+  foc_ctrl.iq_ref = 0.2f;
 }
 
 // 编码器采集任务
@@ -136,6 +139,8 @@ void vAS5600Task(void *argument)
 {
   (void)argument;
   AS5600_DataTypeDef enc;
+
+  vTaskSuspend(ADCHandle);
 
   // 初始化，失败就重试
   while (as5600_init() == 0)
@@ -159,6 +164,9 @@ void vAS5600Task(void *argument)
       as5600_get_data(&enc);
       elec_rad = enc.elec_angle; // 电角度
     }
+
+    vTaskResume(ADCHandle);
+
     vTaskDelay(pdMS_TO_TICKS(2));
     // 机械角度、电角度转成角度制显示，方便观察
     // float mech_deg = enc.mech_angle * 180.0f / PI;
@@ -167,6 +175,8 @@ void vAS5600Task(void *argument)
     // int32_t rpm_x10 = (int32_t)(enc.rpm * 10.0f);
     // printf("raw=%4u  mech=%6.1f°  elec=%6.1f°  turn=%+.2f  rpm=%+ld.%01ld\r\n",
     //        enc.raw, mech_deg, elec_deg, turn,rpm_x10 / 10, (rpm_x10 < 0 ? -rpm_x10 : rpm_x10) % 10);
+
+    // vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -175,14 +185,13 @@ void vADCTask(void *argument)
 {
   (void)argument;
 
-  uint32_t sum_a = 0, sum_b = 0, sum_c = 0;
+  uint32_t sum_a = 0, sum_b = 0;
   uint16_t cnt = 0;
 
-  while (cnt < 2000)
+  while (cnt < 1000)
   {
     sum_a += raw_a;
     sum_b += raw_b;
-    sum_c += raw_c;
     cnt++;
 
     vTaskDelay(pdMS_TO_TICKS(1));
@@ -190,10 +199,34 @@ void vADCTask(void *argument)
 
   of_a = sum_a / cnt;
   of_b = sum_b / cnt;
-  of_c = sum_c / cnt;
-  off_finshal = 1;
+  printf("of_a = %d, of_b = %d\n", of_a, of_b);
 
-  printf("of_a = %d, of_b = %d, of_c = %d\n", of_a, of_b, of_c);
+  /* ==================== 阶段二：🚀 电角度零位（Offset）对齐 ==================== */
+  printf("2. 开始电角度对齐，请勿触摸电机转子...\n");
+
+  // 强行通过 SVPWM 输出一段 1.5V 的开环直流电压，把转子牢牢吸在 d 轴 0° 的物理位置
+  // 此时 theta = 0, Vd = 1.5V, Vq = 0V -> 逆 Park 计算结果 Valpha = 1.5V, Vbeta = 0V
+  float align_valpha = 1.5f;
+  float align_vbeta = 0.0f;
+  float d_a, d_b, d_c;
+
+  // 持续往 A 相线圈灌直流电，持续 1 秒钟让转子彻底晃动静止下来
+  for (int i = 0; i < 500; i++)
+  {
+    FOC_SVPWM(align_valpha, align_vbeta, 12.0f, &d_a, &d_b, &d_c);
+    TIM1->CCR1 = (uint32_t)(d_a * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+    TIM1->CCR2 = (uint32_t)(d_b * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+    TIM1->CCR3 = (uint32_t)(d_c * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+    vTaskDelay(pdMS_TO_TICKS(2)); // 给 FreeRTOS 让出调度空隙
+  }
+
+  // 核心时刻：此时转子已经绝对静止在 d 轴 0 点位置了！
+  // 抓取此时 AS5600 读出的电角度值，这就是全系统的机械-电气零位偏移量
+  electrical_offset = elec_rad;
+
+  printf("3. 角度零点对齐成功！Electrical Offset = %.5f rad\n", electrical_offset);
+
+  off_finshal = 1;
 
   for (;;)
   {
@@ -203,58 +236,32 @@ void vADCTask(void *argument)
       vTaskSuspend(NULL);
     }
 
+    printf("Ia: %.5f, Ib: %.5f, Ic: %.5f\n", Ia, Ib, Ic);
+    // printf("raw=%u,%u of=%u,%u Ia=%.4f JDR1=%u CCER=%08lX\r\n",
+    //    raw_a, raw_b, of_a, of_b, Ia,
+    //    (unsigned)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1),
+    //    (unsigned long)TIM1->CCER);
+
     // printf("VBus: %.3f, CBus: %.3f, NTC: %.3f\n", adc_Regular_buffer[0], adc_Regular_buffer[2], adc_Regular_buffer[2]);
-    printf("VBus: %.3f, CBus: %.3f, NTC: %.3f\n", v_bus, c_bus, ntc);
+    // printf("VBus: %.3f, CBus: %.3f, NTC: %.3f\n", v_bus, c_bus, ntc);
 
     printf("ialpha: %.3f, ibeta: %.3f, id: %.3f, iq: %.3f\n", ialpha, ibeta, id, iq);
 
     // 挂起任务
     //  vTaskSuspend(NULL);
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
 // 创建任务
 void vOtherFunction(void)
 {
-  BaseType_t xAS5600Returned = xTaskCreate(vAS5600Task, "AS5600", 512, NULL, 1, &AS5600Handle);
-  BaseType_t xADCReturned = xTaskCreate(vADCTask, "ADC", 512, NULL, 1, &ADCHandle);
+  BaseType_t xAS5600Returned = xTaskCreate(vAS5600Task, "AS5600", 512, NULL, 3, &AS5600Handle);
+  BaseType_t xADCReturned = xTaskCreate(vADCTask, "ADC", 512, NULL, 0, &ADCHandle);
 
   // if (xReturned != pdPASS)
   // {
   // }
-}
-
-/* HAL Tick 使用 TIM6，周期 1ms */
-HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
-{
-  __HAL_RCC_TIM6_CLK_ENABLE();
-
-  htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 84 - 1;
-  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 1000 - 1;
-  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-
-  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
-  {
-    return HAL_ERROR;
-  }
-
-  HAL_NVIC_SetPriority(TIM6_DAC_IRQn, TickPriority, 0);
-  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
-
-  return HAL_TIM_Base_Start_IT(&htim6);
-}
-
-void HAL_SuspendTick(void)
-{
-  __HAL_TIM_DISABLE_IT(&htim6, TIM_IT_UPDATE);
-}
-
-void HAL_ResumeTick(void)
-{
-  __HAL_TIM_ENABLE_IT(&htim6, TIM_IT_UPDATE);
 }
 
 /* USER CODE END 0 */
@@ -296,6 +303,12 @@ int main(void)
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
+  // __HAL_GPIO_EXTI_CLEAR_IT(K1_Pin | K3_Pin);
+  // NVIC_ClearPendingIRQ(EXTI3_IRQn);
+  // NVIC_ClearPendingIRQ(EXTI4_IRQn);
+
+  HAL_TIM_Base_Start(&htim6); // 初始化定时器tim6
+
   // 1.确保 DRV_EN 和 CAL 为低
   HAL_GPIO_WritePin(DRV_EN_GPIO_Port, DRV_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(CAL_GPIO_Port, CAL_Pin, GPIO_PIN_RESET);
@@ -305,35 +318,38 @@ int main(void)
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
   // 3.等待按键按下，确认通电，led灯灭
-  while (1)
+  do
   {
-    HAL_Delay(200);
-    if (start_flag)
-    {
-      HAL_GPIO_WritePin(LED0_GPIO_Port, LED0_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-      start_flag = 0;
-      break;
-    }
-  }
+    delay_ms(200);
+  } while (!start_flag);
+
+  start_flag = 0;
+  HAL_GPIO_WritePin(LED0_GPIO_Port, LED0_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
 
   // 4.拉高DRV_EN
-    HAL_GPIO_WritePin(DRV_EN_GPIO_Port, DRV_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(DRV_EN_GPIO_Port, DRV_EN_Pin, GPIO_PIN_SET);
 
   // 5.唤醒完成后确认 FAULT 为⾼电平
   while (HAL_GPIO_ReadPin(FAULT_GPIO_Port, FAULT_Pin) == 0)
   {
     HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
     HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-    HAL_Delay(100);
+    delay_ms(100);
   }
 
+  delay_ms(1000); // 等待采样电路稳定
+  FOC_Control_Init();
+
   // 6.启动慢速规则组 DMA 采样
-  uint8_t rct =  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_Regular_buffer, 3);
-  // printf("ADC DMA start status=%d\r\n", (int)rct);
+  // HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_Regular_buffer, 3);
 
   // 7.启动注入组，等待 TIM1 硬件触发
   HAL_ADCEx_InjectedStart_IT(&hadc1);
+
+  // 使能 CH4 比较，产生 ADC 注入触发
+  HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
+  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
   // 8.启动 TIM1 的 6 路 PWM，同时函数自动启动tim1
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -345,9 +361,7 @@ int main(void)
 
   // 9.必须手动开启主输出 MOE
   __HAL_TIM_MOE_ENABLE(&htim1);
-
-  HAL_Delay(1000); // 等待采样电路稳定
-  FOC_Control_Init();
+  HAL_TIM_Base_Start(&htim1);
 
   // 10.任务创建
   vOtherFunction();
@@ -453,11 +467,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 // ADC 注入通道转换完成回调函数
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-    if (hadc->Instance == ADC1) {
-        v_bus = FOC_GetVbus(adc_Regular_buffer[0]);
-        c_bus = FOC_GetCbus(adc_Regular_buffer[1]);
-        ntc   = FOC_GetNTC(adc_Regular_buffer[2]);
-    }
+  if (hadc->Instance == ADC1)
+  {
+    v_bus = FOC_GetVbus(adc_Regular_buffer[0]);
+    c_bus = FOC_GetCbus(adc_Regular_buffer[1]);
+    ntc = FOC_GetNTC(adc_Regular_buffer[2]);
+  }
 }
 
 // ADC 注入通道转换完成回调函数
@@ -465,19 +480,20 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   if (hadc->Instance == ADC1)
   {
-    // 读取ADC注入组的采集的ABC三相电流采样输出
+    // 读取ADC注入组的采集的ABC三相电流采样输出  --这里只采AB相电流，换算出Ia和Ib后计算得出Ic
     raw_a = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
     raw_b = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
-    raw_c = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
-
-    Ia = CurrentSense_Convert(raw_a, of_a);
-    Ib = CurrentSense_Convert(raw_b, of_b);
-    Ic = CurrentSense_Convert(raw_c, of_c);
 
     if (off_finshal != 0)
     {
+      float real_elec_rad = elec_rad - electrical_offset;
+
+      Ia = CurrentSense_Convert(raw_a, of_a);
+      Ib = CurrentSense_Convert(raw_b, of_b);
+      Ic = -(Ia + Ib);
+
       FOC_Clarke(Ia, Ib, &ialpha, &ibeta);
-      FOC_Park(ialpha, ibeta, elec_rad, &id, &iq);
+      FOC_Park(ialpha, ibeta, real_elec_rad, &id, &iq);
 
       // 电流双闭环
       foc_ctrl.vd = PI_Update(&pi_id, foc_ctrl.id_ref, id, FOC_DT);
@@ -485,27 +501,26 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
       foc_ctrl.vq = PI_Update(&pi_iq, foc_ctrl.iq_ref, iq, FOC_DT);
 
       // 反Park
-      FOC_InversePark(foc_ctrl.vd, foc_ctrl.vq, elec_rad, &foc_ctrl.valpha, &foc_ctrl.vbeta);
+      FOC_InversePark(foc_ctrl.vd, foc_ctrl.vq, real_elec_rad, &foc_ctrl.valpha, &foc_ctrl.vbeta);
 
       // SVPWM：先计算占空比，不写 TIM1 CCR
-      FOC_SVPWM(foc_ctrl.valpha, foc_ctrl.vbeta, v_bus, &foc_ctrl.duty_a, &foc_ctrl.duty_b, &foc_ctrl.duty_c);
+      FOC_SVPWM(foc_ctrl.valpha, foc_ctrl.vbeta, 12.0, &foc_ctrl.duty_a, &foc_ctrl.duty_b, &foc_ctrl.duty_c);
 
-      //更新占空比
+      // 更新占空比
       TIM1->CCR1 = (uint32_t)(foc_ctrl.duty_a * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
       TIM1->CCR2 = (uint32_t)(foc_ctrl.duty_b * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
       TIM1->CCR3 = (uint32_t)(foc_ctrl.duty_c * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
     }
+    else
+    {
+      // 🚀 核心保命线：在校准未完成前，强制给定时器 50% 占空比，保持 MOS 管安全续流，不给任何驱动电压！
+      uint32_t half_arr = (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U) / 2;
+      TIM1->CCR1 = half_arr;
+      TIM1->CCR2 = half_arr;
+      TIM1->CCR3 = half_arr;
+    }
   }
 }
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Instance == TIM6)
-  {
-    HAL_IncTick();
-  }
-}
-
 /* USER CODE END 4 */
 
 /**

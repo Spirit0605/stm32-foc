@@ -49,17 +49,11 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, DRV_EN_Pin|CAL_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : K1_Pin */
-  GPIO_InitStruct.Pin = K1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(K1_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : K3_Pin */
-  GPIO_InitStruct.Pin = K3_Pin;
+  /*Configure GPIO pins : K1_Pin K3_Pin */
+  GPIO_InitStruct.Pin = K1_Pin|K3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(K3_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED1_Pin LED0_Pin */
   GPIO_InitStruct.Pin = LED1_Pin|LED0_Pin;
@@ -85,7 +79,7 @@ void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI3_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
 }

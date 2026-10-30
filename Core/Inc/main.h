@@ -77,8 +77,6 @@ void SystemClock_Config(void);
 #define IOUTA_GPIO_Port GPIOA
 #define IOUTB_Pin GPIO_PIN_4
 #define IOUTB_GPIO_Port GPIOA
-#define IOUTC_Pin GPIO_PIN_5
-#define IOUTC_GPIO_Port GPIOA
 #define FAULT_Pin GPIO_PIN_7
 #define FAULT_GPIO_Port GPIOE
 #define INLA_Pin GPIO_PIN_8
