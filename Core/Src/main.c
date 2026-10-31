@@ -63,7 +63,7 @@ volatile float c_bus = 0.0f; // ⺟线电流采样输出，对应 ADC_CBUS
 volatile float ntc = 0.0f;   // 温度采样输出，对应 ADC_NTC
 
 // 电角度零点偏置校准
-volatile uint16_t electrical_offset = 0.0f;
+volatile float electrical_offset = 0.0f;
 // 零点偏置校准
 volatile uint16_t of_a = 0, of_b = 0;
 // 唤醒驱动板后
@@ -140,8 +140,6 @@ void vAS5600Task(void *argument)
   (void)argument;
   AS5600_DataTypeDef enc;
 
-  vTaskSuspend(ADCHandle);
-
   // 初始化，失败就重试
   while (as5600_init() == 0)
   {
@@ -165,9 +163,7 @@ void vAS5600Task(void *argument)
       elec_rad = enc.elec_angle; // 电角度
     }
 
-    vTaskResume(ADCHandle);
-
-    vTaskDelay(pdMS_TO_TICKS(2));
+    vTaskDelay(pdMS_TO_TICKS(1));
     // 机械角度、电角度转成角度制显示，方便观察
     // float mech_deg = enc.mech_angle * 180.0f / PI;
     // float elec_deg = enc.elec_angle * 180.0f / PI;
@@ -176,7 +172,7 @@ void vAS5600Task(void *argument)
     // printf("raw=%4u  mech=%6.1f°  elec=%6.1f°  turn=%+.2f  rpm=%+ld.%01ld\r\n",
     //        enc.raw, mech_deg, elec_deg, turn,rpm_x10 / 10, (rpm_x10 < 0 ? -rpm_x10 : rpm_x10) % 10);
 
-    // vTaskDelay(pdMS_TO_TICKS(100));
+    // vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -187,6 +183,10 @@ void vADCTask(void *argument)
 
   uint32_t sum_a = 0, sum_b = 0;
   uint16_t cnt = 0;
+
+  HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
+  HAL_ADCEx_InjectedStart_IT(&hadc1);
+  HAL_TIM_Base_Start(&htim1);
 
   while (cnt < 1000)
   {
@@ -199,10 +199,9 @@ void vADCTask(void *argument)
 
   of_a = sum_a / cnt;
   of_b = sum_b / cnt;
-  printf("of_a = %d, of_b = %d\n", of_a, of_b);
+  printf("of_a = %d, of_b = %d  ", of_a, of_b);
 
   /* ==================== 阶段二：🚀 电角度零位（Offset）对齐 ==================== */
-  printf("2. 开始电角度对齐，请勿触摸电机转子...\n");
 
   // 强行通过 SVPWM 输出一段 1.5V 的开环直流电压，把转子牢牢吸在 d 轴 0° 的物理位置
   // 此时 theta = 0, Vd = 1.5V, Vq = 0V -> 逆 Park 计算结果 Valpha = 1.5V, Vbeta = 0V
@@ -211,20 +210,34 @@ void vADCTask(void *argument)
   float d_a, d_b, d_c;
 
   // 持续往 A 相线圈灌直流电，持续 1 秒钟让转子彻底晃动静止下来
-  for (int i = 0; i < 500; i++)
-  {
-    FOC_SVPWM(align_valpha, align_vbeta, 12.0f, &d_a, &d_b, &d_c);
-    TIM1->CCR1 = (uint32_t)(d_a * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
-    TIM1->CCR2 = (uint32_t)(d_b * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
-    TIM1->CCR3 = (uint32_t)(d_c * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
-    vTaskDelay(pdMS_TO_TICKS(2)); // 给 FreeRTOS 让出调度空隙
-  }
 
+  FOC_SVPWM(align_valpha, align_vbeta, 12.0f, &d_a, &d_b, &d_c);
+  TIM1->CCR1 = (uint32_t)(d_a * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+  TIM1->CCR2 = (uint32_t)(d_b * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+  TIM1->CCR3 = (uint32_t)(d_c * (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+  vTaskDelay(pdMS_TO_TICKS(2)); // 给 FreeRTOS 让出调度空隙
+
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+  __HAL_TIM_MOE_ENABLE(&htim1);
+
+  vTaskDelay(pdMS_TO_TICKS(1000));
   // 核心时刻：此时转子已经绝对静止在 d 轴 0 点位置了！
   // 抓取此时 AS5600 读出的电角度值，这就是全系统的机械-电气零位偏移量
-  electrical_offset = elec_rad;
 
-  printf("3. 角度零点对齐成功！Electrical Offset = %.5f rad\n", electrical_offset);
+  electrical_offset = elec_rad;
+  // of_a = 2016, of_b = 2009   Electrical Offset = 3.35482 rad
+  // of_a = 2015, of_b = 2009 Electrical Offset = 0.86517 rad
+  // of_a = 2016, of_b = 2010  Electrical Offset = 4.07732 rad
+  // of_a = 2017, of_b = 2010  Electrical Offset = 2.17365 rad
+
+
+  printf("Electrical Offset = %.5f rad\n", electrical_offset);
+
 
   off_finshal = 1;
 
@@ -303,10 +316,6 @@ int main(void)
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
-  // __HAL_GPIO_EXTI_CLEAR_IT(K1_Pin | K3_Pin);
-  // NVIC_ClearPendingIRQ(EXTI3_IRQn);
-  // NVIC_ClearPendingIRQ(EXTI4_IRQn);
-
   HAL_TIM_Base_Start(&htim6); // 初始化定时器tim6
 
   // 1.确保 DRV_EN 和 CAL 为低
@@ -345,23 +354,23 @@ int main(void)
   // HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_Regular_buffer, 3);
 
   // 7.启动注入组，等待 TIM1 硬件触发
-  HAL_ADCEx_InjectedStart_IT(&hadc1);
+  // HAL_ADCEx_InjectedStart_IT(&hadc1);
 
-  // 使能 CH4 比较，产生 ADC 注入触发
-  HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
-  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  // // 使能 CH4 比较，产生 ADC 注入触发
+  // HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
+  // // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
-  // 8.启动 TIM1 的 6 路 PWM，同时函数自动启动tim1
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+  // // 8.启动 TIM1 的 6 路 PWM，同时函数自动启动tim1
+  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  // HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+  // HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+  // HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
 
-  // 9.必须手动开启主输出 MOE
-  __HAL_TIM_MOE_ENABLE(&htim1);
-  HAL_TIM_Base_Start(&htim1);
+  // // 9.必须手动开启主输出 MOE
+  // __HAL_TIM_MOE_ENABLE(&htim1);
+  // HAL_TIM_Base_Start(&htim1);
 
   // 10.任务创建
   vOtherFunction();
@@ -487,6 +496,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     if (off_finshal != 0)
     {
       float real_elec_rad = elec_rad - electrical_offset;
+      if (real_elec_rad < 0.0f)
+        real_elec_rad += TWO_PI;
+      if (real_elec_rad >= TWO_PI)
+        real_elec_rad -= TWO_PI;
 
       Ia = CurrentSense_Convert(raw_a, of_a);
       Ib = CurrentSense_Convert(raw_b, of_b);
