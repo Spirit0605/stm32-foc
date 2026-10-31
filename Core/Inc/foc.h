@@ -16,7 +16,7 @@ typedef struct
     float32_t integral;     //积分
     float32_t out_min;  
     float32_t out_max;  
-} PI_Controller_t;      //保存 PI 控制器的状态
+} PI_Controller_t;      //P比例-I积分控制器
 
 typedef struct
 {
@@ -32,7 +32,7 @@ typedef struct
     float32_t duty_a;
     float32_t duty_b;
     float32_t duty_c;
-} FOC_Control_t;        //保存整条控制链的输入、输出
+} FOC_Control_t;        //磁场定向控制  control控制 保存整条控制链的输入、输出
 
 //Clark变换
 void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta);
