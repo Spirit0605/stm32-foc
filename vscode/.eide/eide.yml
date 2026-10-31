@@ -1,7 +1,7 @@
 version: "4.1"
 name: demo
 type: ARM
-deviceName: STM32F407xx
+deviceName: STM32F407ZGTx
 packDir: .pack/Keil/STM32F4xx_DFP.3.1.1
 srcDirs: []
 virtualFolder:
@@ -77,7 +77,11 @@ virtualFolder:
             - path: ../Core/Src/system_stm32f4xx.c
           folders: []
     - name: ::CMSIS
-      files: []
+      files:
+        - path: ../Drivers/CMSIS/DSP/Include/arm_math.h
+        - path: ../Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c
+        - path: ../Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c
+        - path: ../Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c
       folders: []
 dependenceList: []
 outDir: build
@@ -88,16 +92,17 @@ targets:
     cppPreprocessAttrs:
       defineList:
         - USE_HAL_DRIVER
-        - STM32F407xx
         - ARM_MATH_CM4
+        - STM32F407xx
       incList:
         - .
         - ../Core/Inc
         - ../FreeRTOS/Inc
         - ../Drivers/STM32F4xx_HAL_Driver/Inc
         - ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
-        - ../Drivers/CMSIS/Device/ST/STM32F4xx/Include
         - ../Drivers/CMSIS/Include
+        - ../Drivers/CMSIS/DSP/Include
+        - ../Drivers/CMSIS/Device/ST/STM32F4xx/Include
         - .cmsis/include
         - ../MDK-ARM/RTE/_demo
       libList: []
@@ -113,8 +118,7 @@ targets:
         options:
           version: 4
           afterBuildTasks: []
-          asm-compiler:
-            defines: []
+          asm-compiler: {}
           beforeBuildTasks: []
           c/cpp-compiler:
             CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
@@ -132,7 +136,6 @@ targets:
             output-format: elf
             ro-base: "0x08000000"
             rw-base: "0x20000000"
-            xo-base: ""
         scatterFilePath: ""
         storageLayout:
           RAM:

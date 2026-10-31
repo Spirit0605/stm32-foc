@@ -28,7 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "math.h"
+#include "arm_math.h"
 #include "AS5600.h"
 #include "current.h"
 #include "foc.h"

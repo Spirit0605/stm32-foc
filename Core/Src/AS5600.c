@@ -3,9 +3,9 @@
 #include <math.h>
 
 AS5600_DataTypeDef encoder;
-static volatile uint16_t prev_raw = 0;         //上一次的原始角度值
-static uint32_t last_tick = 0;        //上一次采样的时间戳
-static uint8_t has_reference = 0;     //是否已经建立参考基准
+static volatile uint16_t prev_raw = 0;          //上一次的原始角度值
+static uint32_t last_tick = 0;                  //上一次采样的时间戳
+static uint8_t has_reference = 0;               //是否已经建立参考基准
 
 /**
  * @brief  读取 AS5600 原始角度寄存器

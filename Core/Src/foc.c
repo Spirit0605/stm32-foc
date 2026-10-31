@@ -1,6 +1,6 @@
 #include "foc.h"
 
-void FOC_Clarke(float ia, float ib, float *ialpha, float *ibeta)
+void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
 {
     if (ialpha == NULL || ibeta == NULL)
         return;
@@ -9,27 +9,25 @@ void FOC_Clarke(float ia, float ib, float *ialpha, float *ibeta)
     *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
 }
 
-void FOC_Park(float ialpha, float ibeta, float theta, float *id, float *iq)
+void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
 {
-    float cos_t = cosf(theta);
-    float sin_t = sinf(theta);
+    float32_t cos_t = arm_cos_f32(theta);
+    float32_t sin_t = arm_sin_f32(theta);
 
     *id = ialpha * cos_t + ibeta * sin_t;
     *iq = -ialpha * sin_t + ibeta * cos_t;
 }
 
-// 限幅函数
-static float clampf(float x, float min, float max)
+// 优化后的限幅内联函数（0跳转，单周期硬件执行）
+static __inline float32_t clampf(float32_t x, float32_t min, float32_t max)
 {
-    if (x > max)
-        return max;
-    if (x < min)
-        return min;
+    x = (x > max) ? max : x;
+    x = (x < min) ? min : x;
     return x;
 }
 
 // PI 控制器初始化
-void PI_Init(PI_Controller_t *pi, float kp, float ki, float out_min, float out_max)
+void PI_Init(PI_Controller_t *pi, float32_t kp, float32_t ki, float32_t out_min, float32_t out_max)
 {
     if (pi == 0)
         return;
@@ -42,18 +40,18 @@ void PI_Init(PI_Controller_t *pi, float kp, float ki, float out_min, float out_m
 }
 
 // 离散 PI，带积分限幅 调电流
-float PI_Update(PI_Controller_t *pi, float ref, float feedback, float dt)
+float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, float32_t dt)
 {
     if (pi == 0 || dt <= 0.0f)
         return 0.0f;
 
-    float error = ref - feedback;
+    float32_t error = ref - feedback;
 
-    float integral_new = pi->integral + pi->ki * error * dt;
+    float32_t integral_new = pi->integral + pi->ki * error * dt;
 
     integral_new = clampf(integral_new, pi->out_min, pi->out_max);
 
-    float output = pi->kp * error + integral_new;
+    float32_t output = pi->kp * error + integral_new;
 
     output = clampf(output, pi->out_min, pi->out_max);
 
@@ -65,13 +63,13 @@ float PI_Update(PI_Controller_t *pi, float ref, float feedback, float dt)
 /* 反 Park：dq 坐标系 -> alpha-beta 静止坐标系
  * theta 使用弧度
  */
-void FOC_InversePark(float vd, float vq, float theta, float *valpha, float *vbeta)
+void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
 {
     if (valpha == 0 || vbeta == 0)
         return;
 
-    float sin_theta = sinf(theta);
-    float cos_theta = cosf(theta);
+    float32_t sin_theta = arm_sin_f32(theta);
+    float32_t cos_theta = arm_cos_f32(theta);
 
     *valpha = vd * cos_theta - vq * sin_theta;
     *vbeta = vd * sin_theta + vq * cos_theta;
@@ -81,19 +79,19 @@ void FOC_InversePark(float vd, float vq, float theta, float *valpha, float *vbet
 // vbus：直流母线电压，单位 V
 // duty：范围 0.0 ~ 1.0
 // 生成三相占空比
-void FOC_SVPWM(float valpha, float vbeta, float vbus, float *duty_a, float *duty_b, float *duty_c)
+void FOC_SVPWM(float32_t valpha, float32_t vbeta, float32_t vbus, float32_t *duty_a, float32_t *duty_b, float32_t *duty_c)
 {
     if (duty_a == 0 || duty_b == 0 || duty_c == 0 || vbus <= 0.1f)
         return;
 
     /* 计算三相等效电压 */
-    float ua = valpha;
-    float ub = -0.5f * valpha + SQRT3_BY_2 * vbeta;
-    float uc = -0.5f * valpha - SQRT3_BY_2 * vbeta;
+    float32_t ua = valpha;
+    float32_t ub = -0.5f * valpha + SQRT3_BY_2 * vbeta;
+    float32_t uc = -0.5f * valpha - SQRT3_BY_2 * vbeta;
 
     /* 求最大、最小相电压 */
-    float umax = ua;
-    float umin = ua;
+    float32_t umax = ua;
+    float32_t umin = ua;
 
     if (ub > umax)
         umax = ub;
@@ -106,11 +104,11 @@ void FOC_SVPWM(float valpha, float vbeta, float vbus, float *duty_a, float *duty
         umin = uc;
 
     /* 过调制保护：缩放电压矢量，避免占空比越界 */
-    float span = umax - umin;
+    float32_t span = umax - umin;
 
     if (span > vbus)
     {
-        float scale = vbus / span;
+        float32_t scale = vbus / span;
 
         ua *= scale;
         ub *= scale;
@@ -121,7 +119,7 @@ void FOC_SVPWM(float valpha, float vbeta, float vbus, float *duty_a, float *duty
     }
 
     /* 注入零序电压，实现中心对齐 SVPWM */
-    float offset = -0.5f * (umax + umin);
+    float32_t offset = -0.5f * (umax + umin);
 
     *duty_a = clampf(0.5f + (ua + offset) / vbus, 0.0f, 1.0f);
 

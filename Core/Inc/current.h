@@ -2,6 +2,7 @@
 #define __CURRENT_H
 
 #include <stdint.h>
+#include "arm_math.h"
 
 #define ADC_VREF 3.3f             // ADC标准电压
 #define ADC_MAX 4095.0f           // 12位ADC
@@ -9,12 +10,14 @@
 
 #define VBUS_DIV_RATIO ((124.0f + 4.7f) / 4.7f)     //母线电压换算公式
 
-//获取母线电压
+//获得母线电压采样
 float FOC_GetVbus(uint16_t adc_raw);
+//获得母线电流采样
 float FOC_GetCbus(uint16_t adc_raw);
+//获得温度采样
 float FOC_GetNTC(uint16_t adc_raw);
 
-// 三相电流计算公式
+// 电流采样转换
 float CurrentSense_Convert(uint16_t raw, float offset);
 
 #endif
