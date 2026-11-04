@@ -1,8 +1,7 @@
-#ifndef __CURRENT_H
-#define __CURRENT_H
+#ifndef __ADC_SIGNAL_H
+#define __ADC_SIGNAL_H
 
 #include <stdint.h>
-#include "arm_math.h"
 
 #define ADC_VREF 3.3f             // ADC标准电压
 #define ADC_MAX 4095.0f           // 12位ADC
@@ -19,5 +18,6 @@ float FOC_GetNTC(uint16_t adc_raw);
 
 // 电流采样转换
 float CurrentSense_Convert(uint16_t raw, float offset);
+
 
 #endif

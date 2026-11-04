@@ -28,7 +28,7 @@ virtualFolder:
                 - path: ../Core/Src/tim.c
                 - path: ../Core/Src/adc.c
                 - path: ../Core/Src/AS5600.c
-                - path: ../Core/Src/current.c
+                - path: ../Core/Src/adc_signal.c
                 - path: ../Core/Src/foc.c
                 - path: ../Core/Src/delay.c
                 - path: ../Core/Src/stm32f4xx_it.c

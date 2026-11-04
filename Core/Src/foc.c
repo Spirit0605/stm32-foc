@@ -1,22 +1,22 @@
 #include "foc.h"
 
-void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
-{
-    if (ialpha == NULL || ibeta == NULL)
-        return;
+// __STATIC_INLINE void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
+// {
+//     if (ialpha == NULL || ibeta == NULL)
+//         return;
 
-    *ialpha = ia;
-    *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
-}
+//     *ialpha = ia;
+//     *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
+// }
 
-void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
-{
-    float32_t cos_t = arm_cos_f32(theta);
-    float32_t sin_t = arm_sin_f32(theta);
+// __STATIC_INLINE void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
+// {
+//     float32_t cos_t = arm_cos_f32(theta);
+//     float32_t sin_t = arm_sin_f32(theta);
 
-    *id = ialpha * cos_t + ibeta * sin_t;
-    *iq = -ialpha * sin_t + ibeta * cos_t;
-}
+//     *id = ialpha * cos_t + ibeta * sin_t;
+//     *iq = -ialpha * sin_t + ibeta * cos_t;
+// }
 
 // 优化后的限幅内联函数（0跳转，单周期硬件执行）
 static __inline float32_t clampf(float32_t x, float32_t min, float32_t max)
@@ -39,22 +39,28 @@ void PI_Init(PI_Controller_t *pi, float32_t kp, float32_t ki, float32_t out_min,
     pi->out_max = out_max;
 }
 
-// 离散 PI，带积分限幅 调电流
+// 离散PI，带积分限幅 调电流
 float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, float32_t dt)
 {
     if (pi == 0 || dt <= 0.0f)
         return 0.0f;
 
+    //1.计算误差
     float32_t error = ref - feedback;
 
+    //2.计算新的积分累加值
     float32_t integral_new = pi->integral + pi->ki * error * dt;
 
+    //3.抗积分饱和限幅
     integral_new = clampf(integral_new, pi->out_min, pi->out_max);
 
+    //4.计算总控制输出
     float32_t output = pi->kp * error + integral_new;
 
+    //5.总输出二次限幅
     output = clampf(output, pi->out_min, pi->out_max);
 
+    //6.动态更新控制器状态
     pi->integral = integral_new;
 
     return output;
@@ -63,17 +69,17 @@ float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, floa
 /* 反 Park：dq 坐标系 -> alpha-beta 静止坐标系
  * theta 使用弧度
  */
-void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
-{
-    if (valpha == 0 || vbeta == 0)
-        return;
+// __STATIC_INLINE void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
+// {
+//     if (valpha == 0 || vbeta == 0)
+//         return;
 
-    float32_t sin_theta = arm_sin_f32(theta);
-    float32_t cos_theta = arm_cos_f32(theta);
+//     float32_t sin_theta = arm_sin_f32(theta);
+//     float32_t cos_theta = arm_cos_f32(theta);
 
-    *valpha = vd * cos_theta - vq * sin_theta;
-    *vbeta = vd * sin_theta + vq * cos_theta;
-}
+//     *valpha = vd * cos_theta - vq * sin_theta;
+//     *vbeta = vd * sin_theta + vq * cos_theta;
+// }
 
 // SVPWM：alpha-beta 电压 -> 三相占空比
 // vbus：直流母线电压，单位 V

@@ -4,7 +4,6 @@
 #include "arm_math.h"
 #include "main.h"
 
-
 #define INV_SQRT3       0.57735026919f      //根号三分之一
 #define SQRT3_BY_2      0.86602540378f      //二分之根号三
 
@@ -20,9 +19,6 @@ typedef struct
 
 typedef struct
 {
-    float32_t id_ref;     
-    float32_t iq_ref;
-
     float32_t vd;
     float32_t vq;
 
@@ -35,9 +31,24 @@ typedef struct
 } FOC_Control_t;        //磁场定向控制  control控制 保存整条控制链的输入、输出
 
 //Clark变换
-void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta);
+__STATIC_INLINE void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
+{
+    if (ialpha == NULL || ibeta == NULL)
+        return;
+
+    *ialpha = ia;
+    *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
+}
+
 //Park变换
-void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq);
+__STATIC_INLINE void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
+{
+    float32_t cos_t = arm_cos_f32(theta);
+    float32_t sin_t = arm_sin_f32(theta);
+
+    *id = ialpha * cos_t + ibeta * sin_t;
+    *iq = -ialpha * sin_t + ibeta * cos_t;
+}
 
 /*
     作用：初始化PI控制器
@@ -66,9 +77,18 @@ float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, floa
     vd、vq：PI 控制器输出的两轴电压。
     theta：转子电角度，单位是弧度。
     valpha、vbeta：转换后的静止坐标系电压
-*/
-void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta);
+*/ 
+__STATIC_INLINE void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
+{
+    if (valpha == 0 || vbeta == 0)
+        return;
 
+    float32_t sin_theta = arm_sin_f32(theta);
+    float32_t cos_theta = arm_cos_f32(theta);
+
+    *valpha = vd * cos_theta - vq * sin_theta;
+    *vbeta = vd * sin_theta + vq * cos_theta;
+}
 
 /*
     空间矢量脉宽调制
