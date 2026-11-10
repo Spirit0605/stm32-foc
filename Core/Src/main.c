@@ -262,15 +262,15 @@ void vADCTask(void *argument)
       vTaskSuspend(NULL);
     }
     // 测试计算耗时
-    printf("delay = %d\n", delay);
+    // printf("delay = %d\n", delay);
 
     printf("电角度: %.3f, 转速: %.3f\n", real_elec_rad, now_rpm);
 
     printf("Ia: %.5f, Ib: %.5f, Ic: %.5f\n", Ia, Ib, Ic);
 
-    printf("VBus: %.3f, CBus: %.3f, NTC: %.3f\n", v_bus, c_bus, ntc);
+    // printf("VBus: %.3f, CBus: %.3f, NTC: %.3f\n", v_bus, c_bus, ntc);
 
-    printf("ialpha: %.3f, ibeta: %.3f, id: %.3f, iq: %.3f\n", ialpha, ibeta, id, iq);
+    // printf("ialpha: %.3f, ibeta: %.3f, id: %.3f, iq: %.3f\n", ialpha, ibeta, id, iq);
 
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -332,9 +332,9 @@ void vOtherFunction(void)
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
 
@@ -362,10 +362,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_TIM1_Init();
   MX_TIM6_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   // 初始化定时器tim6
@@ -446,22 +446,22 @@ int main(void)
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-   */
+  */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -476,8 +476,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
@@ -494,7 +495,7 @@ void SystemClock_Config(void)
 // 按键外部中断 - 急停
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if (GPIO_Pin == K3_Pin)
+  if (GPIO_Pin == KEY0_Pin)
   {
     // 1.防抖 - 停止接收中断
     HAL_NVIC_DisableIRQ(EXTI4_IRQn);
@@ -521,7 +522,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
     // 4.点亮故障指示灯
   }
-  else if (GPIO_Pin == K1_Pin)
+  else if (GPIO_Pin == KEYUP_Pin)
   {
     start_flag = 1;
   }
@@ -582,9 +583,9 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -597,12 +598,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

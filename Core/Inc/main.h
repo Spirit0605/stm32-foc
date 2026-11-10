@@ -57,26 +57,26 @@ void SystemClock_Config(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define K1_Pin GPIO_PIN_3
-#define K1_GPIO_Port GPIOE
-#define K1_EXTI_IRQn EXTI3_IRQn
-#define K3_Pin GPIO_PIN_4
-#define K3_GPIO_Port GPIOE
-#define K3_EXTI_IRQn EXTI4_IRQn
+#define KEY0_Pin GPIO_PIN_4
+#define KEY0_GPIO_Port GPIOE
+#define KEY0_EXTI_IRQn EXTI4_IRQn
 #define LED1_Pin GPIO_PIN_9
 #define LED1_GPIO_Port GPIOF
 #define LED0_Pin GPIO_PIN_10
 #define LED0_GPIO_Port GPIOF
-#define VBUS_Pin GPIO_PIN_0
-#define VBUS_GPIO_Port GPIOA
-#define CBUS_Pin GPIO_PIN_1
-#define CBUS_GPIO_Port GPIOA
-#define NTC_Pin GPIO_PIN_2
-#define NTC_GPIO_Port GPIOA
-#define IOUTA_Pin GPIO_PIN_3
-#define IOUTA_GPIO_Port GPIOA
-#define IOUTB_Pin GPIO_PIN_4
-#define IOUTB_GPIO_Port GPIOA
+#define IOUTA_Pin GPIO_PIN_0
+#define IOUTA_GPIO_Port GPIOC
+#define IOUTB_Pin GPIO_PIN_1
+#define IOUTB_GPIO_Port GPIOC
+#define VBUS_Pin GPIO_PIN_2
+#define VBUS_GPIO_Port GPIOC
+#define CBUS_Pin GPIO_PIN_3
+#define CBUS_GPIO_Port GPIOC
+#define KEYUP_Pin GPIO_PIN_0
+#define KEYUP_GPIO_Port GPIOA
+#define KEYUP_EXTI_IRQn EXTI0_IRQn
+#define NTC_Pin GPIO_PIN_4
+#define NTC_GPIO_Port GPIOC
 #define FAULT_Pin GPIO_PIN_7
 #define FAULT_GPIO_Port GPIOE
 #define INLA_Pin GPIO_PIN_8
