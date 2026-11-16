@@ -3,19 +3,20 @@
 
 #include "arm_math.h"
 #include "main.h"
+#include "math.h"
 
-#define INV_SQRT3       0.57735026919f      //根号三分之一
-#define SQRT3_BY_2      0.86602540378f      //二分之根号三
+#define INV_SQRT3 0.57735026919f  // 根号三分之一
+#define SQRT3_BY_2 0.86602540378f // 二分之根号三
 
 typedef struct
 {
-    float32_t kp;       
-    float32_t ki;       
+    float32_t kp;
+    float32_t ki;
 
-    float32_t integral;     //积分
-    float32_t out_min;  
-    float32_t out_max;  
-} PI_Controller_t;      //P比例-I积分控制器
+    float32_t integral; // 积分
+    float32_t out_min;
+    float32_t out_max;
+} PI_Controller_t; // P比例-I积分控制器
 
 typedef struct
 {
@@ -28,9 +29,9 @@ typedef struct
     float32_t duty_a;
     float32_t duty_b;
     float32_t duty_c;
-} FOC_Control_t;        //磁场定向控制  control控制 保存整条控制链的输入、输出
+} FOC_Control_t; // 磁场定向控制  control控制 保存整条控制链的输入、输出
 
-//Clark变换
+// Clark变换
 __STATIC_INLINE void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
 {
     if (ialpha == NULL || ibeta == NULL)
@@ -40,11 +41,14 @@ __STATIC_INLINE void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, f
     *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
 }
 
-//Park变换
+// Park变换
 __STATIC_INLINE void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
 {
     float32_t cos_t = arm_cos_f32(theta);
     float32_t sin_t = arm_sin_f32(theta);
+
+    // float32_t cos_t = cosf(theta);
+    // float32_t sin_t = sinf(theta);
 
     *id = ialpha * cos_t + ibeta * sin_t;
     *iq = -ialpha * sin_t + ibeta * cos_t;
@@ -56,10 +60,9 @@ __STATIC_INLINE void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta
     kp	比例系数
     ki	积分系数
     out_min	输出下限
-    out_max	输出上限    
+    out_max	输出上限
 */
 void PI_Init(PI_Controller_t *pi, float32_t kp, float32_t ki, float32_t out_min, float32_t out_max);
-
 
 /*
     作用：调电流
@@ -70,14 +73,13 @@ void PI_Init(PI_Controller_t *pi, float32_t kp, float32_t ki, float32_t out_min,
 */
 float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, float32_t dt);
 
-
 /*
     逆 Park 坐标变换
     作用：把旋转坐标系中的电压 \(V_d,V_q\)，转换成静止坐标系中的电压 \(V_\alpha,V_\beta\)。
     vd、vq：PI 控制器输出的两轴电压。
     theta：转子电角度，单位是弧度。
     valpha、vbeta：转换后的静止坐标系电压
-*/ 
+*/
 __STATIC_INLINE void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
 {
     if (valpha == 0 || vbeta == 0)
@@ -85,6 +87,9 @@ __STATIC_INLINE void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta
 
     float32_t sin_theta = arm_sin_f32(theta);
     float32_t cos_theta = arm_cos_f32(theta);
+
+    // float32_t sin_theta = sinf(theta);
+    // float32_t cos_theta = cosf(theta);
 
     *valpha = vd * cos_theta - vq * sin_theta;
     *vbeta = vd * sin_theta + vq * cos_theta;

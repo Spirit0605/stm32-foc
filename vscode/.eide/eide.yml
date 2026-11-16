@@ -31,6 +31,7 @@ virtualFolder:
                 - path: ../Core/Src/adc_signal.c
                 - path: ../Core/Src/foc.c
                 - path: ../Core/Src/delay.c
+                - path: ../Core/Src/can.c
                 - path: ../Core/Src/stm32f4xx_it.c
                 - path: ../Core/Src/stm32f4xx_hal_msp.c
               folders: []
@@ -71,6 +72,7 @@ virtualFolder:
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
+            - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c
           folders: []
         - name: CMSIS
           files:

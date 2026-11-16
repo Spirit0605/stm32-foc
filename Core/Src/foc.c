@@ -1,6 +1,6 @@
 #include "foc.h"
 
-// __STATIC_INLINE void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
+// void FOC_Clarke(float32_t ia, float32_t ib, float32_t *ialpha, float32_t *ibeta)
 // {
 //     if (ialpha == NULL || ibeta == NULL)
 //         return;
@@ -9,10 +9,13 @@
 //     *ibeta = INV_SQRT3 * (ia + 2.0f * ib); // 1/√3
 // }
 
-// __STATIC_INLINE void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
+// void FOC_Park(float32_t ialpha, float32_t ibeta, float32_t theta, float32_t *id, float32_t *iq)
 // {
 //     float32_t cos_t = arm_cos_f32(theta);
 //     float32_t sin_t = arm_sin_f32(theta);
+
+//     // float32_t cos_t = cosf(theta);
+//     // float32_t sin_t = sinf(theta);
 
 //     *id = ialpha * cos_t + ibeta * sin_t;
 //     *iq = -ialpha * sin_t + ibeta * cos_t;
@@ -40,42 +43,79 @@ void PI_Init(PI_Controller_t *pi, float32_t kp, float32_t ki, float32_t out_min,
 }
 
 // 离散PI，带积分限幅 调电流
+// float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, float32_t dt)
+// {
+//     if (pi == 0 || dt <= 0.0f)
+//         return 0.0f;
+
+//     //1.计算误差
+//     float32_t error = ref - feedback;
+
+//     //2.计算新的积分累加值
+//     float32_t integral_new = pi->integral + pi->ki * error * dt;
+
+//     //3.抗积分饱和限幅
+//     integral_new = clampf(integral_new, pi->out_min, pi->out_max);
+
+//     //4.计算总控制输出
+//     float32_t output = pi->kp * error + integral_new;
+
+//     //5.总输出二次限幅
+//     output = clampf(output, pi->out_min, pi->out_max);
+
+//     //6.动态更新控制器状态
+//     pi->integral = integral_new;
+
+//     return output;
+// }
+
+// 离散 PI：条件积分抗饱和
 float32_t PI_Update(PI_Controller_t *pi, float32_t ref, float32_t feedback, float32_t dt)
 {
-    if (pi == 0 || dt <= 0.0f)
+    if (pi == NULL || dt <= 0.0f)
         return 0.0f;
 
-    //1.计算误差
+    // 1. 计算误差
     float32_t error = ref - feedback;
 
-    //2.计算新的积分累加值
+    // 2. 比例项
+    float32_t proportional = pi->kp * error;
+
+    // 3. 计算候选积分项
     float32_t integral_new = pi->integral + pi->ki * error * dt;
 
-    //3.抗积分饱和限幅
-    integral_new = clampf(integral_new, pi->out_min, pi->out_max);
+    // 4. 计算未限幅输出
+    float32_t output_unlimited = proportional + integral_new;
 
-    //4.计算总控制输出
-    float32_t output = pi->kp * error + integral_new;
+    // 5. 条件积分：输出饱和且误差继续推动饱和时，停止积分
+    if ((output_unlimited > pi->out_max && error > 0.0f) || (output_unlimited < pi->out_min && error < 0.0f))
+    {
+        integral_new = pi->integral;
+    }
 
-    //5.总输出二次限幅
-    output = clampf(output, pi->out_min, pi->out_max);
+    // 6. 更新积分状态
+    pi->integral = clampf(integral_new, pi->out_min, pi->out_max);
 
-    //6.动态更新控制器状态
-    pi->integral = integral_new;
+    // 7. 计算最终输出
+    float32_t output = proportional + pi->integral;
 
-    return output;
+    // 8. 输出限幅
+    return clampf(output, pi->out_min, pi->out_max);
 }
 
 /* 反 Park：dq 坐标系 -> alpha-beta 静止坐标系
  * theta 使用弧度
  */
-// __STATIC_INLINE void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
+// void FOC_InversePark(float32_t vd, float32_t vq, float32_t theta, float32_t *valpha, float32_t *vbeta)
 // {
 //     if (valpha == 0 || vbeta == 0)
 //         return;
 
 //     float32_t sin_theta = arm_sin_f32(theta);
 //     float32_t cos_theta = arm_cos_f32(theta);
+
+//     // float32_t sin_theta = sinf(theta);
+//     // float32_t cos_theta = cosf(theta);
 
 //     *valpha = vd * cos_theta - vq * sin_theta;
 //     *vbeta = vd * sin_theta + vq * cos_theta;

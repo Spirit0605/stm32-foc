@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.h
+ * @brief          : Header for main.c file.
+ *                   This file contains the common defines of the application.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -37,6 +37,21 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
+  typedef enum
+  {
+    MotorsStop = 0,     //停止
+    MotorsOffset,       //偏置完成
+    MotorsReady,        //上电完成
+    MotorsStart         //运行
+  } Motors_State;
+
+  typedef enum
+  {
+    CanRunning = 0,     //运行
+    CanStop,            //停止
+    CanError            //错误
+  }Can_States; 
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -53,7 +68,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void SystemClock_Config(void);
+  void SystemClock_Config(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -77,6 +92,8 @@ void SystemClock_Config(void);
 #define KEYUP_EXTI_IRQn EXTI0_IRQn
 #define NTC_Pin GPIO_PIN_4
 #define NTC_GPIO_Port GPIOC
+#define IOUTC_Pin GPIO_PIN_5
+#define IOUTC_GPIO_Port GPIOC
 #define FAULT_Pin GPIO_PIN_7
 #define FAULT_GPIO_Port GPIOE
 #define INLA_Pin GPIO_PIN_8
